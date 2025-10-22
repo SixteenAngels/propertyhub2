@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Dimensions, Text, Pressable, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import MapView, { Marker, Callout, Region } from 'react-native-maps';
+import ClusteredMapView from 'react-native-map-clustering';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -33,7 +34,7 @@ export default function HomeMapScreen() {
 
   return (
     <View style={styles.container}>
-      <MapView style={styles.map} initialRegion={initialRegion}>
+      <ClusteredMapView style={styles.map} initialRegion={initialRegion}>
         {properties.map((p) => (
           p.location ? (
             <Marker key={p.id} coordinate={{ latitude: p.location.lat, longitude: p.location.lng }}>
@@ -54,7 +55,7 @@ export default function HomeMapScreen() {
             </Marker>
           ) : null
         ))}
-      </MapView>
+      </ClusteredMapView>
     </View>
   );
 }

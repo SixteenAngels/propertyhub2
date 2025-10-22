@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import * as WebBrowser from 'expo-web-browser';
@@ -19,6 +19,7 @@ type Property = {
 export default function PropertyDetailScreen() {
   const route = useRoute<any>();
   const { propertyId } = route.params ?? {};
+  const nav = useNavigation<any>();
   const [prop, setProp] = useState<Property | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -57,7 +58,9 @@ export default function PropertyDetailScreen() {
       <Pressable disabled={loading} style={[styles.btn, loading && { opacity: 0.6 }]} onPress={createBooking}>
         <Text style={styles.btnText}>{loading ? 'Loading…' : 'Book / Request'}</Text>
       </Pressable>
-      <Pressable style={[styles.btn, { backgroundColor: '#1f2937' }]}><Text style={styles.btnText}>Chat with Owner</Text></Pressable>
+      <Pressable style={[styles.btn, { backgroundColor: '#1f2937' }]} onPress={() => nav.navigate('ChatThread', { chatId: propertyId })}>
+        <Text style={styles.btnText}>Chat with Owner</Text>
+      </Pressable>
     </ScrollView>
   );
 }

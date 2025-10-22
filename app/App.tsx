@@ -7,6 +7,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ChatThreadScreen from './src/screens/chat/ChatThreadScreen';
 import PropertyDetailScreen from './src/screens/property/PropertyDetailScreen';
 import ApprovalsScreen from './src/screens/admin/ApprovalsScreen';
+import AuthScreen from './src/screens/auth/AuthScreen';
+import AdminRolesScreen from './src/screens/admin/AdminRolesScreen';
+import EscrowConsoleScreen from './src/screens/admin/EscrowConsoleScreen';
+import ModerationScreen from './src/screens/ModerationScreen';
+import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import HomeMapScreen from './src/screens/HomeMapScreen';
 import ExploreScreen from './src/screens/ExploreScreen';
 import MyListingsScreen from './src/screens/MyListingsScreen';
@@ -43,9 +48,14 @@ export default function App() {
     <NavigationContainer>
       <RootStack.Navigator>
         <RootStack.Screen name="Root" component={Tabs} options={{ headerShown: false }} />
+        <RootStack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign in' }} />
         <RootStack.Screen name="ChatThread" component={ChatThreadScreen} options={{ title: 'Chat' }} />
         <RootStack.Screen name="PropertyDetail" component={PropertyDetailScreen} options={{ title: 'Property' }} />
         <RootStack.Screen name="Approvals" component={ApprovalsScreen} options={{ title: 'Approvals' }} />
+        <RootStack.Screen name="AdminRoles" component={AdminRolesScreen} options={{ title: 'Assign Roles' }} />
+        <RootStack.Screen name="EscrowConsole" component={EscrowConsoleScreen} options={{ title: 'Escrow Console' }} />
+        <RootStack.Screen name="Moderation" component={ModerationScreen} options={{ title: 'Moderation' }} />
+        <RootStack.Screen name="MyBookings" component={MyBookingsScreen} options={{ title: 'My Bookings' }} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

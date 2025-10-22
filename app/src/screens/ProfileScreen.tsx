@@ -23,6 +23,9 @@ export default function ProfileScreen() {
       <Pressable style={styles.btn} onPress={() => nav.navigate('Approvals')}>
         <Text style={styles.btnText}>Open Approvals</Text>
       </Pressable>
+      <Pressable style={[styles.btn, { backgroundColor: '#2563eb' }]} onPress={() => nav.navigate('Auth')}>
+        <Text style={styles.btnText}>Sign in options</Text>
+      </Pressable>
     </View>
   );
 }
