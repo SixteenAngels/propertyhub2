@@ -3,6 +3,9 @@ import { View, StyleSheet, Dimensions, Text, Pressable, Image, TextInput } from 
 import { useNavigation } from '@react-navigation/native';
 import MapView, { Marker, Callout, Region } from 'react-native-maps';
 import ClusteredMapView from 'react-native-map-clustering';
+import * as Location from 'expo-location';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import Constants from 'expo-constants';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -25,6 +28,7 @@ export default function HomeMapScreen() {
     () => ({ latitude: 6.5244, longitude: 3.3792, latitudeDelta: 0.3, longitudeDelta: 0.3 }),
     []
   );
+  const [region, setRegion] = useState<Region>(initialRegion);
 
   useEffect(() => {
     const filters = [where('status', '==', 'approved')];
@@ -48,12 +52,29 @@ export default function HomeMapScreen() {
         {(['Sell','Rent','Lease','Stay'] as const).map((t) => (
           <Pressable key={t} style={[styles.filterPill, type===t && styles.filterActive]} onPress={() => setType(t)}><Text>{t}</Text></Pressable>
         ))}
+        <Pressable style={[styles.filterPill, { backgroundColor: '#111827' }]} onPress={async () => {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') return;
+          const loc = await Location.getCurrentPositionAsync({});
+          const r = { latitude: loc.coords.latitude, longitude: loc.coords.longitude, latitudeDelta: 0.2, longitudeDelta: 0.2 };
+          setRegion(r);
+        }}><Text style={{ color: 'white' }}>Near me</Text></Pressable>
         <View style={{ flexDirection: 'row', gap: 6, marginLeft: 'auto' }}>
           <TextInput placeholder="Min" keyboardType="numeric" value={minPrice} onChangeText={setMinPrice} style={styles.priceInput} />
           <TextInput placeholder="Max" keyboardType="numeric" value={maxPrice} onChangeText={setMaxPrice} style={styles.priceInput} />
         </View>
       </View>
-      <ClusteredMapView style={styles.map} initialRegion={initialRegion}>
+      <GooglePlacesAutocomplete
+        placeholder="Search places"
+        fetchDetails
+        onPress={(data, details) => {
+          const g = details?.geometry?.location;
+          if (g) setRegion({ latitude: g.lat, longitude: g.lng, latitudeDelta: 0.2, longitudeDelta: 0.2 });
+        }}
+        query={{ key: (Constants as any)?.expoConfig?.extra?.GOOGLE_MAPS_GEOCODING_API_KEY || (Constants as any)?.manifest?.extra?.GOOGLE_MAPS_GEOCODING_API_KEY, language: 'en' }}
+        styles={{ container: { position: 'absolute', top: 58, left: 12, right: 12, zIndex: 20 }, listView: { backgroundColor: 'white' } }}
+      />
+      <ClusteredMapView style={styles.map} initialRegion={initialRegion} region={region} onRegionChangeComplete={setRegion}>
         {properties.map((p) => (
           p.location ? (
             <Marker key={p.id} coordinate={{ latitude: p.location.lat, longitude: p.location.lng }}>
