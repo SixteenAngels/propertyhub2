@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function userRole() {
+      return get(/databases/$(db)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() { return userRole() == "admin"; }
+    function isManager() { return userRole() == "manager"; }
+    function isOwner(ownerId) { return request.auth != null && request.auth.uid == ownerId; }
+
+    match /users/{uid} {
+      allow read: if isAdmin() || request.auth.uid == uid;
+      allow write: if isAdmin() || request.auth.uid == uid;
+    }
+
+    match /properties/{pid} {
+      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == "pending";
+      allow read: if resource.data.status == "approved" || isAdmin() || isManager() || isOwner(resource.data.ownerId);
+      allow update: if isOwner(resource.data.ownerId) && (!('status' in request.resource.data) || resource.data.status == "pending");
+      allow update: if isManager() || isAdmin();
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+
+    match /bookings/{bid} {
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin() || isManager() || isOwner(resource.data.userId) || isOwner(resource.data.ownerId);
+      allow update: if isAdmin() || isManager();
+    }
+
+    match /chats/{cid} {
+      allow read, write: if isAdmin() || isManager() ||
+        (request.auth != null && request.auth.uid in resource.data.participants);
+      match /messages/{mid} {
+        allow read, write: if isAdmin() || isManager() ||
+          (request.auth != null && request.auth.uid in get(/databases/$(db)/documents/chats/$(cid)).data.participants);
+      }
+    }
+  }
+}
