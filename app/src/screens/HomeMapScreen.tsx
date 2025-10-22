@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Dimensions, Text, Pressable, Image } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import MapView, { Marker, Callout, Region } from 'react-native-maps';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -14,6 +15,7 @@ type Property = {
 };
 
 export default function HomeMapScreen() {
+  const nav = useNavigation<any>();
   const [properties, setProperties] = useState<Property[]>([]);
   const initialRegion: Region = useMemo(
     () => ({ latitude: 6.5244, longitude: 3.3792, latitudeDelta: 0.3, longitudeDelta: 0.3 }),
@@ -43,7 +45,9 @@ export default function HomeMapScreen() {
                   <View style={styles.cardContent}>
                     <Text numberOfLines={1} style={styles.cardTitle}>{p.title}</Text>
                     <Text style={styles.cardSubtitle}>{p.type} • ${p.price}</Text>
-                    <Pressable style={styles.cta}><Text style={styles.ctaText}>View</Text></Pressable>
+                    <Pressable style={styles.cta} onPress={() => nav.navigate('PropertyDetail', { propertyId: p.id })}>
+                      <Text style={styles.ctaText}>View</Text>
+                    </Pressable>
                   </View>
                 </View>
               </Callout>

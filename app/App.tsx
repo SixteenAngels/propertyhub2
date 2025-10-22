@@ -4,6 +4,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ChatThreadScreen from './src/screens/chat/ChatThreadScreen';
+import PropertyDetailScreen from './src/screens/property/PropertyDetailScreen';
+import ApprovalsScreen from './src/screens/admin/ApprovalsScreen';
 import HomeMapScreen from './src/screens/HomeMapScreen';
 import ExploreScreen from './src/screens/ExploreScreen';
 import MyListingsScreen from './src/screens/MyListingsScreen';
@@ -31,6 +33,8 @@ export default function App() {
       <RootStack.Navigator>
         <RootStack.Screen name="Root" component={Tabs} options={{ headerShown: false }} />
         <RootStack.Screen name="ChatThread" component={ChatThreadScreen} options={{ title: 'Chat' }} />
+        <RootStack.Screen name="PropertyDetail" component={PropertyDetailScreen} options={{ title: 'Property' }} />
+        <RootStack.Screen name="Approvals" component={ApprovalsScreen} options={{ title: 'Approvals' }} />
       </RootStack.Navigator>
     </NavigationContainer>
   );
