@@ -82,7 +82,7 @@ export const createBooking = onCall(async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
         throw new HttpsError('unauthenticated', 'Authentication required');
-    const { propertyId, amount, transactionType, payerEmail } = request.data;
+    const { propertyId, amount, transactionType, payerEmail, startDate, endDate } = request.data;
     if (!propertyId || !amount || !transactionType || !payerEmail) {
         throw new HttpsError('invalid-argument', 'Missing required fields');
     }
@@ -90,6 +90,24 @@ export const createBooking = onCall(async (request) => {
     const propSnap = await propRef.get();
     if (!propSnap.exists || propSnap.data().status !== 'approved') {
         throw new HttpsError('failed-precondition', 'Property not available');
+    }
+    if ((transactionType === 'Stay' || transactionType === 'Rent') && (!startDate || !endDate || endDate < startDate)) {
+        throw new HttpsError('invalid-argument', 'startDate and endDate required for Stay/Rent');
+    }
+    // Prevent overlapping bookings for Stay/Rent
+    if (transactionType === 'Stay' || transactionType === 'Rent') {
+        const blocking = ['pending', 'escrow', 'completed'];
+        const q = db.collection('bookings')
+            .where('propertyId', '==', propertyId)
+            .where('status', 'in', blocking)
+            .where('startDate', '<=', endDate);
+        const snap = await q.get();
+        const overlaps = snap.docs.some(d => {
+            const b = d.data();
+            return (b.endDate ?? 0) >= startDate;
+        });
+        if (overlaps)
+            throw new HttpsError('failed-precondition', 'Selected dates overlap with existing booking');
     }
     const bookingRef = db.collection('bookings').doc();
     const bookingId = bookingRef.id;
@@ -99,6 +117,8 @@ export const createBooking = onCall(async (request) => {
         userId: uid,
         amount,
         transactionType,
+        startDate: startDate ?? null,
+        endDate: endDate ?? null,
         status: 'pending',
         escrowStatus: 'n/a',
         createdAt: FieldValue.serverTimestamp(),
@@ -109,6 +129,7 @@ export const createBooking = onCall(async (request) => {
         logger.warn('PAYSTACK_SECRET_KEY not set; returning mock reference');
         return { bookingId, reference: `mock_${bookingId}`, authorizationUrl: 'about:blank' };
     }
+    const callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
     const initRes = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
@@ -119,7 +140,8 @@ export const createBooking = onCall(async (request) => {
             email: payerEmail,
             amount: Math.round(amount * 100),
             reference: bookingId,
-            metadata: { bookingId, propertyId, uid, transactionType },
+            metadata: { bookingId, propertyId, uid, transactionType, startDate, endDate },
+            ...(callbackUrl ? { callback_url: callbackUrl } : {}),
         }),
     });
     if (!initRes.ok) {
@@ -156,6 +178,25 @@ export const paystackWebhook = onRequest(async (req, res) => {
     }
     res.sendStatus(200);
 });
+export const cancelBooking = onCall(async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new HttpsError('unauthenticated', 'Authentication required');
+    const { bookingId } = request.data;
+    if (!bookingId)
+        throw new HttpsError('invalid-argument', 'bookingId required');
+    const ref = db.collection('bookings').doc(bookingId);
+    const snap = await ref.get();
+    if (!snap.exists)
+        throw new HttpsError('not-found', 'Booking not found');
+    const b = snap.data();
+    if (b.userId !== uid)
+        throw new HttpsError('permission-denied', 'Not your booking');
+    if (b.status !== 'pending')
+        throw new HttpsError('failed-precondition', 'Only pending bookings can be cancelled');
+    await ref.set({ status: 'cancelled', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { ok: true };
+});
 export const releaseEscrow = onCall(async (request) => {
     await requireRole({ auth: request.auth }, ['admin', 'manager']);
     const { bookingId } = request.data;
@@ -180,6 +221,11 @@ export const onMessageCreate = onDocumentCreated('chats/{chatId}/messages/{messa
     const receiverId = msg.receiverId;
     if (!receiverId)
         return;
+    // Update chat last message
+    await db.collection('chats').doc(event.params.chatId).set({
+        lastMessage: msg.message ?? '',
+        lastMessageAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
     const tokens = await getUserTokens(receiverId);
     if (!tokens.length)
         return;
@@ -188,4 +234,14 @@ export const onMessageCreate = onDocumentCreated('chats/{chatId}/messages/{messa
         notification: { title: 'New message', body: msg.message?.slice(0, 120) ?? 'You have a new message' },
         data: { type: 'chat', chatId: event.params?.chatId ?? '' },
     });
+});
+export const flagMessage = onCall(async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new HttpsError('unauthenticated', 'Authentication required');
+    const { chatId, messageId, reason } = request.data;
+    if (!chatId || !messageId)
+        throw new HttpsError('invalid-argument', 'chatId and messageId required');
+    await db.collection('moderationFlags').add({ chatId, messageId, reason: reason ?? null, reporterId: uid, createdAt: FieldValue.serverTimestamp() });
+    return { ok: true };
 });

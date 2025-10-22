@@ -37,5 +37,11 @@ service cloud.firestore {
           (request.auth != null && request.auth.uid in get(/databases/$(db)/documents/chats/$(cid)).data.participants);
       }
     }
+
+    match /moderationFlags/{id} {
+      allow create: if request.auth != null; // any authenticated user can flag
+      allow read: if isAdmin() || isManager();
+      allow delete, update: if isAdmin();
+    }
   }
 }

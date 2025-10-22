@@ -5,6 +5,7 @@ import { collection, doc, getDoc, getDocs, query, setDoc, where, serverTimestamp
 import { db } from '../../config/firebase';
 import * as WebBrowser from 'expo-web-browser';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { firebaseApp } from '../../config/firebase';
 
 type Property = {
@@ -22,6 +23,8 @@ export default function PropertyDetailScreen() {
   const nav = useNavigation<any>();
   const [prop, setProp] = useState<Property | null>(null);
   const [loading, setLoading] = useState(false);
+  const [start, setStart] = useState<Date | null>(null);
+  const [end, setEnd] = useState<Date | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -38,7 +41,7 @@ export default function PropertyDetailScreen() {
     setLoading(true);
     try {
       const fn = httpsCallable(getFunctions(firebaseApp), 'createBooking');
-      const res: any = await fn({ propertyId, amount: prop.price, transactionType: prop.type, payerEmail: 'demo@example.com' });
+      const res: any = await fn({ propertyId, amount: prop.price, transactionType: prop.type, payerEmail: 'demo@example.com', startDate: start?.getTime(), endDate: end?.getTime() });
       if (res?.data?.authorizationUrl) {
         await WebBrowser.openBrowserAsync(res.data.authorizationUrl);
       }
@@ -63,6 +66,14 @@ export default function PropertyDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
+      {(prop.type === 'Stay' || prop.type === 'Rent') && (
+        <View style={{ marginTop: 12 }}>
+          <Text style={{ fontWeight: '600', marginBottom: 6 }}>Select dates</Text>
+          <DateTimePicker mode="date" value={start ?? new Date()} onChange={(_, d) => setStart(d ?? null)} />
+          <View style={{ height: 6 }} />
+          <DateTimePicker mode="date" value={end ?? new Date()} onChange={(_, d) => setEnd(d ?? null)} />
+        </View>
+      )}
       {prop.photos?.[0] && (
         <Image source={{ uri: prop.photos[0] }} style={{ height: 220, borderRadius: 12, marginBottom: 12 }} />
       )}
