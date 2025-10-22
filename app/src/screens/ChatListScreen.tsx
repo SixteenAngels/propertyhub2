@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, auth } from '../config/firebase';
 import { useNavigation } from '@react-navigation/native';
 
 type Chat = { id: string; lastMessage?: string; lastMessageAt?: any; participants: string[] };
 
-const demoUid = 'demo';
+const demoUid = auth.currentUser?.uid ?? 'demo';
 
 export default function ChatListScreen() {
   const [chats, setChats] = useState<Chat[]>([]);

@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { db, auth } from '../../config/firebase';
 
 type Message = { id: string; senderId: string; receiverId: string; message: string; timestamp: any };
-const demoUid = 'demo';
+const demoUid = auth.currentUser?.uid ?? 'demo';
 
 export default function ChatThreadScreen() {
   const route = useRoute<any>();

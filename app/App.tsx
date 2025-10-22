@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
+import { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -11,6 +12,8 @@ import ExploreScreen from './src/screens/ExploreScreen';
 import MyListingsScreen from './src/screens/MyListingsScreen';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { auth } from './src/config/firebase';
 
 const Tab = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
@@ -28,6 +31,14 @@ function Tabs() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u) {
+        signInAnonymously(auth).catch(() => {});
+      }
+    });
+    return () => unsub();
+  }, []);
   return (
     <NavigationContainer>
       <RootStack.Navigator>

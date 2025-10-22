@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import MapView, { Marker, MapPressEvent } from 'react-native-maps';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, auth } from '../config/firebase';
 
 export default function MyListingsScreen() {
   const [title, setTitle] = useState('');
@@ -17,7 +17,7 @@ export default function MyListingsScreen() {
 
   const submit = async () => {
     await addDoc(collection(db, 'properties'), {
-      ownerId: 'demo',
+      ownerId: auth.currentUser?.uid ?? 'demo',
       title,
       price: Number(price) || 0,
       type,
