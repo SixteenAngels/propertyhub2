@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import * as WebBrowser from 'expo-web-browser';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -47,6 +47,20 @@ export default function PropertyDetailScreen() {
     }
   };
 
+  const contactOwner = async () => {
+    if (!propertyId || !prop) return;
+    // chat id per property between current user and owner
+    const participants = [prop.ownerId];
+    const chatQ = query(collection(db, 'chats'), where('propertyId', '==', propertyId));
+    const existing = await getDocs(chatQ);
+    const first = existing.docs[0];
+    const chatId = first?.id ?? propertyId;
+    if (!first) {
+      await setDoc(doc(db, 'chats', chatId), { propertyId, participants, lastMessage: '', lastMessageAt: serverTimestamp() });
+    }
+    nav.navigate('ChatThread', { chatId });
+  };
+
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
       {prop.photos?.[0] && (
@@ -58,7 +72,7 @@ export default function PropertyDetailScreen() {
       <Pressable disabled={loading} style={[styles.btn, loading && { opacity: 0.6 }]} onPress={createBooking}>
         <Text style={styles.btnText}>{loading ? 'Loading…' : 'Book / Request'}</Text>
       </Pressable>
-      <Pressable style={[styles.btn, { backgroundColor: '#1f2937' }]} onPress={() => nav.navigate('ChatThread', { chatId: propertyId })}>
+      <Pressable style={[styles.btn, { backgroundColor: '#1f2937' }]} onPress={contactOwner}>
         <Text style={styles.btnText}>Chat with Owner</Text>
       </Pressable>
     </ScrollView>

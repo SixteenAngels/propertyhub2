@@ -19,6 +19,8 @@ import ChatListScreen from './src/screens/ChatListScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { auth } from './src/config/firebase';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { db } from './src/config/firebase';
 
 const Tab = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
@@ -38,9 +40,27 @@ function Tabs() {
 export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) {
-        signInAnonymously(auth).catch(() => {});
-      }
+      (async () => {
+        if (!u) {
+          try { await signInAnonymously(auth); } catch {}
+          return;
+        }
+        try {
+          const ref = doc(db, 'users', u.uid);
+          const snap = await getDoc(ref);
+          if (!snap.exists()) {
+            await setDoc(ref, {
+              email: u.email ?? null,
+              name: u.displayName ?? null,
+              role: 'user',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            }, { merge: true });
+          } else {
+            await setDoc(ref, { updatedAt: serverTimestamp() }, { merge: true });
+          }
+        } catch {}
+      })();
     });
     return () => unsub();
   }, []);
