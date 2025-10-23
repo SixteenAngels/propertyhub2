@@ -77,6 +77,7 @@ export default function HomeMapScreen() {
       <GooglePlacesAutocomplete
         placeholder="Search places"
         fetchDetails
+        debounce={300}
         onPress={(data, details) => {
           const g = details?.geometry?.location;
           if (g) setRegion({ latitude: g.lat, longitude: g.lng, latitudeDelta: 0.2, longitudeDelta: 0.2 });

@@ -8,7 +8,7 @@ import * as WebBrowser from 'expo-web-browser';
 
 export default function BookingDetailScreen() {
   const route = useRoute<any>();
-  const { bookingId } = route.params ?? {};
+  const { bookingId, autoVerify } = route.params ?? {};
   const [booking, setBooking] = useState<any>(null);
   useEffect(() => {
     (async () => {
@@ -17,6 +17,10 @@ export default function BookingDetailScreen() {
       if (snap.exists()) setBooking(snap.data());
     })();
   }, [bookingId]);
+  useEffect(() => {
+    if (!autoVerify) return;
+    verify();
+  }, [autoVerify]);
   if (!booking) return <View style={styles.container}><Text>Loading...</Text></View>;
   const verify = async () => {
     const fn = httpsCallable(getFunctions(), 'verifyBookingUser');
@@ -50,6 +54,11 @@ export default function BookingDetailScreen() {
       {booking.status !== 'escrow' && (
         <Pressable style={{ marginTop: 12, backgroundColor: '#111827', padding: 10, borderRadius: 10 }} onPress={resume}>
           <Text style={{ color: 'white', fontWeight: '700' }}>Resume Payment</Text>
+        </Pressable>
+      )}
+      {booking.status === 'pending' && (
+        <Pressable style={{ marginTop: 12, backgroundColor: '#dc2626', padding: 10, borderRadius: 10 }} onPress={() => setBooking({ ...booking, status: 'cancelled' })}>
+          <Text style={{ color: 'white', fontWeight: '700' }}>Cancel</Text>
         </Pressable>
       )}
     </View>

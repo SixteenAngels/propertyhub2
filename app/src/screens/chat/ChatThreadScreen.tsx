@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, setDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, setDoc, doc, updateDoc, getDoc, onSnapshot as onSnapDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -24,6 +24,14 @@ export default function ChatThreadScreen() {
     const unsub = onSnapshot(q, (snap) => setMessages(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))));
     return () => unsub();
   }, [messagesRef]);
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    const unsub = onSnapDoc(chatRef, (snap) => {
+      const t = (snap.data()?.typing ?? {}) as Record<string, boolean>;
+      setTypingUsers(t);
+    });
+    return () => unsub();
+  }, [chatRef]);
 
   useEffect(() => {
     // mark as read for current user
@@ -49,8 +57,9 @@ export default function ChatThreadScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', android: undefined })} style={styles.container}>
-      {/* Typing indicator */}
-      {/* In a full implementation, subscribe to chat doc and read chat.typing to show indicator */}
+      {Object.entries(typingUsers).some(([uid, val]) => uid !== demoUid && val) && (
+        <Text style={{ padding: 8, color: '#6b7280' }}>Typing…</Text>
+      )}
       <FlatList
         data={messages}
         keyExtractor={(i) => i.id}

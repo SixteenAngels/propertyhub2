@@ -76,7 +76,7 @@ export default function App() {
       // propertyapp://booking/<id>
       const segments = (path ?? '').split('/');
       if (segments[0] === 'booking' && segments[1]) {
-        navRef.navigate('BookingDetail' as never, { bookingId: segments[1] } as never);
+        navRef.navigate('BookingDetail' as never, { bookingId: segments[1], autoVerify: true } as never);
       }
     });
     return () => sub.remove();

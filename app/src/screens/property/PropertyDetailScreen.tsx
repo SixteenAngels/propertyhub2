@@ -82,6 +82,9 @@ export default function PropertyDetailScreen() {
       )}
       <Text style={styles.title}>{prop.title}</Text>
       <Text style={styles.meta}>{prop.type} • ${prop.price}</Text>
+      {(prop as any).rejectionReason && (
+        <Text style={{ color: '#dc2626', marginTop: 4 }}>Rejection reason: {(prop as any).rejectionReason}</Text>
+      )}
       <Text style={styles.desc}>{prop.description ?? 'No description'}</Text>
       <Pressable disabled={loading} style={[styles.btn, loading && { opacity: 0.6 }]} onPress={createBooking}>
         <Text style={styles.btnText}>{loading ? 'Loading…' : 'Book / Request'}</Text>
