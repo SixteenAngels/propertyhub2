@@ -55,13 +55,13 @@ export default function PropertyDetailScreen() {
   const contactOwner = async () => {
     if (!propertyId || !prop) return;
     // chat id per property between current user and owner
-    const participants = [prop.ownerId];
+    const participants = [prop.ownerId, (firebaseApp as any).auth?.currentUser?.uid].filter(Boolean);
     const chatQ = query(collection(db, 'chats'), where('propertyId', '==', propertyId));
     const existing = await getDocs(chatQ);
     const first = existing.docs[0];
     const chatId = first?.id ?? propertyId;
     if (!first) {
-      await setDoc(doc(db, 'chats', chatId), { propertyId, participants, lastMessage: '', lastMessageAt: serverTimestamp() });
+      await setDoc(doc(db, 'chats', chatId), { propertyId, participants, lastMessage: '', lastMessageAt: serverTimestamp(), typing: {} });
     }
     nav.navigate('ChatThread', { chatId });
   };

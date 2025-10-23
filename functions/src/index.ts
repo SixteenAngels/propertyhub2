@@ -135,7 +135,10 @@ export const createBooking = onCall(async (request) => {
     return { bookingId, reference: `mock_${bookingId}`, authorizationUrl: 'about:blank' };
   }
 
-  const callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
+  let callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
+  if (callbackUrl && callbackUrl.includes('{bookingId}')) {
+    callbackUrl = callbackUrl.replace('{bookingId}', bookingId);
+  }
   const initRes = await fetch('https://api.paystack.co/transaction/initialize', {
     method: 'POST',
     headers: {
@@ -231,6 +234,58 @@ export const onMessageCreate = onDocumentCreated('chats/{chatId}/messages/{messa
     notification: { title: 'New message', body: msg.message?.slice(0, 120) ?? 'You have a new message' },
     data: { type: 'chat', chatId: event.params?.chatId ?? '' },
   });
+});
+
+export const sendMessage = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Authentication required');
+  const { chatId, message } = request.data as { chatId: string; message: string };
+  if (!chatId || !message || typeof message !== 'string' || message.length > 1000) {
+    throw new HttpsError('invalid-argument', 'Invalid message');
+  }
+  const chatRef = db.collection('chats').doc(chatId);
+  const chatSnap = await chatRef.get();
+  if (!chatSnap.exists) throw new HttpsError('not-found', 'Chat not found');
+  const chat = chatSnap.data() as any;
+  const participants: string[] = Array.isArray(chat.participants) ? chat.participants : [];
+  if (!participants.includes(uid)) throw new HttpsError('permission-denied', 'Not a participant');
+
+  // Rate limit: at most 1 message per 500ms per user per chat
+  const recentSnap = await db.collection('chats').doc(chatId)
+    .collection('messages')
+    .where('senderId', '==', uid)
+    .orderBy('timestamp', 'desc')
+    .limit(1)
+    .get();
+  const now = Date.now();
+  const last = recentSnap.docs[0]?.data()?.timestamp?.toMillis?.() ?? 0;
+  if (now - last < 500) throw new HttpsError('resource-exhausted', 'Slow down');
+
+  const other = participants.find((p) => p !== uid) ?? undefined;
+  await db.collection('chats').doc(chatId).collection('messages').add({
+    senderId: uid,
+    receiverId: other ?? null,
+    message,
+    timestamp: FieldValue.serverTimestamp(),
+    readBy: [uid],
+  });
+  await chatRef.set({ lastMessage: message, lastMessageAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { ok: true };
+});
+
+export const setTyping = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Authentication required');
+  const { chatId, typing } = request.data as { chatId: string; typing: boolean };
+  if (!chatId) throw new HttpsError('invalid-argument', 'chatId required');
+  const chatRef = db.collection('chats').doc(chatId);
+  const chatSnap = await chatRef.get();
+  if (!chatSnap.exists) throw new HttpsError('not-found', 'Chat not found');
+  const chat = chatSnap.data() as any;
+  const participants: string[] = Array.isArray(chat.participants) ? chat.participants : [];
+  if (!participants.includes(uid)) throw new HttpsError('permission-denied', 'Not a participant');
+  await chatRef.set({ typing: { ...(chat.typing ?? {}), [uid]: !!typing } }, { merge: true });
+  return { ok: true };
 });
 
 export const flagMessage = onCall(async (request) => {
