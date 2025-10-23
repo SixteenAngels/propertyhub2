@@ -6,7 +6,8 @@ import ClusteredMapView from 'react-native-map-clustering';
 import * as Location from 'expo-location';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import Constants from 'expo-constants';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { geohashQueryBounds } from 'geofire-common';
 import { db } from '../config/firebase';
 
 type Property = {
@@ -31,19 +32,28 @@ export default function HomeMapScreen() {
   const [region, setRegion] = useState<Region>(initialRegion);
 
   useEffect(() => {
-    const filters = [where('status', '==', 'approved')];
-    if (type !== 'All') filters.push(where('type', '==', type));
-    // Note: Firestore requires indexes for price filters combined with others; keep simple in MVP or filter client-side
-    const q = query(collection(db, 'properties'), ...filters);
-    const unsub = onSnapshot(q, (snap) => {
-      let items: Property[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+    (async () => {
+      const filters = [where('status', '==', 'approved')];
+      if (type !== 'All') filters.push(where('type', '==', type));
       const min = parseFloat(minPrice) || 0;
       const max = parseFloat(maxPrice) || Number.MAX_SAFE_INTEGER;
-      items = items.filter(p => (p.price ?? 0) >= min && (p.price ?? 0) <= max);
-      setProperties(items);
-    });
-    return () => unsub();
-  }, [type, minPrice, maxPrice]);
+      const bounds = geohashQueryBounds([region.latitude, region.longitude], Math.max(1000, region.latitudeDelta * 111_320));
+      const results: Record<string, Property> = {};
+      await Promise.all(
+        bounds.map(async ([start, end]) => {
+          const qs = query(collection(db, 'properties'), ...filters, where('geohash', '>=', start), where('geohash', '<=', end));
+          const snap = await getDocs(qs);
+          snap.forEach((d) => {
+            const p = { id: d.id, ...(d.data() as any) } as Property;
+            if (!p.location) return;
+            if ((p.price ?? 0) < min || (p.price ?? 0) > max) return;
+            results[p.id] = p;
+          });
+        })
+      );
+      setProperties(Object.values(results));
+    })();
+  }, [region, type, minPrice, maxPrice]);
 
   return (
     <View style={styles.container}>
@@ -71,7 +81,7 @@ export default function HomeMapScreen() {
           const g = details?.geometry?.location;
           if (g) setRegion({ latitude: g.lat, longitude: g.lng, latitudeDelta: 0.2, longitudeDelta: 0.2 });
         }}
-        query={{ key: (Constants as any)?.expoConfig?.extra?.GOOGLE_MAPS_GEOCODING_API_KEY || (Constants as any)?.manifest?.extra?.GOOGLE_MAPS_GEOCODING_API_KEY, language: 'en' }}
+        query={{ key: (Constants as any)?.expoConfig?.extra?.GOOGLE_PLACES_API_KEY || (Constants as any)?.manifest?.extra?.GOOGLE_PLACES_API_KEY, language: 'en' }}
         styles={{ container: { position: 'absolute', top: 58, left: 12, right: 12, zIndex: 20 }, listView: { backgroundColor: 'white' } }}
       />
       <ClusteredMapView style={styles.map} initialRegion={initialRegion} region={region} onRegionChangeComplete={setRegion}>
