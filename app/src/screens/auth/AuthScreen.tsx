@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
-import { PhoneAuthProvider, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, linkWithCredential } from 'firebase/auth';
+import { PhoneAuthProvider, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithCredential as signInWithCredentialAuth, linkWithCredential } from 'firebase/auth';
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import Constants from 'expo-constants';
 import { auth, firebaseApp } from '../../config/firebase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -43,6 +44,31 @@ export default function AuthScreen() {
     }
   };
 
+  const signInWithGoogle = async () => {
+    const extra = (Constants as any)?.expoConfig?.extra || (Constants as any)?.manifest?.extra || {};
+    const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
+    const discovery = {
+      authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenEndpoint: 'https://oauth2.googleapis.com/token',
+    } as const;
+    const request = new AuthSession.AuthRequest({
+      clientId: extra.EXPO_CLIENT_ID || extra.GOOGLE_WEB_CLIENT_ID,
+      redirectUri,
+      responseType: AuthSession.ResponseType.IdToken,
+      scopes: ['openid', 'profile', 'email'],
+    });
+    await request.makeAuthUrlAsync(discovery);
+    const result = await request.promptAsync(discovery, { useProxy: true });
+    if (result.type === 'success' && result.params.id_token) {
+      const credential = GoogleAuthProvider.credential(result.params.id_token);
+      try {
+        await signInWithCredentialAuth(auth, credential);
+      } catch {
+        if (auth.currentUser) await linkWithCredential(auth.currentUser, credential);
+      }
+    }
+  };
+
   return (
     <View style={styles.container}>
       <FirebaseRecaptchaVerifierModal ref={recaptchaRef} firebaseConfig={firebaseApp.options as any} />
@@ -62,6 +88,9 @@ export default function AuthScreen() {
       ) : (
         <Pressable style={styles.btn} onPress={sendSms}><Text style={styles.btnText}>Send SMS</Text></Pressable>
       )}
+
+      <View style={{ height: 16 }} />
+      <Pressable style={[styles.btn, { backgroundColor: '#ea4335' }]} onPress={signInWithGoogle}><Text style={styles.btnText}>Sign in with Google</Text></Pressable>
     </View>
   );
 }
