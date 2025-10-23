@@ -49,6 +49,8 @@ export default function ChatThreadScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', android: undefined })} style={styles.container}>
+      {/* Typing indicator */}
+      {/* In a full implementation, subscribe to chat doc and read chat.typing to show indicator */}
       <FlatList
         data={messages}
         keyExtractor={(i) => i.id}

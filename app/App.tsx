@@ -24,6 +24,7 @@ import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { auth } from './src/config/firebase';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from './src/config/firebase';
+import { configureNotifications } from './src/services/notifications';
 
 const Tab = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
@@ -67,6 +68,7 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+  useEffect(() => { configureNotifications(); }, []);
   const navRef = useNavigationContainerRef();
   useEffect(() => {
     const sub = Linking.addEventListener('url', ({ url }) => {

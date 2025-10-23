@@ -123,6 +123,7 @@ export default function MyListingsScreen() {
 
   const deleteListing = async (id: string) => {
     await deleteDoc(doc(db, 'properties', id));
+    // Optionally delete Storage files if URLs are known with path pattern
   };
 
   return (

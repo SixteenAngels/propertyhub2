@@ -15,3 +15,19 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   const token = (await Notifications.getExpoPushTokenAsync()).data;
   return token;
 }
+
+export function configureNotifications() {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    }),
+  });
+  if (Device.osName === 'Android') {
+    Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
+  }
+}
