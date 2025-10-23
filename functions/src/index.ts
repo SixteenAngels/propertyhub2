@@ -202,6 +202,59 @@ export const verifyBooking = onCall(async (request) => {
   return { status };
 });
 
+export const verifyBookingUser = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Authentication required');
+  const { bookingId } = request.data as { bookingId: string };
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId required');
+  const ref = db.collection('bookings').doc(bookingId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Booking not found');
+  const b = snap.data() as any;
+  if (b.userId !== uid) throw new HttpsError('permission-denied', 'Not your booking');
+  const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+  if (!PAYSTACK_SECRET_KEY) throw new HttpsError('failed-precondition', 'No Paystack secret');
+  const resp = await fetch(`https://api.paystack.co/transaction/verify/${bookingId}`, { headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` } });
+  const json: any = await resp.json();
+  const status = json?.data?.status;
+  if (status === 'success') {
+    await ref.set({ status: 'escrow', escrowStatus: 'held', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  } else if (status === 'failed') {
+    await ref.set({ status: 'failed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
+  return { status };
+});
+
+export const resumePayment = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Authentication required');
+  const { bookingId, payerEmail } = request.data as { bookingId: string; payerEmail: string };
+  if (!bookingId || !payerEmail) throw new HttpsError('invalid-argument', 'bookingId and payerEmail required');
+  const ref = db.collection('bookings').doc(bookingId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Booking not found');
+  const b = snap.data() as any;
+  if (b.userId !== uid) throw new HttpsError('permission-denied', 'Not your booking');
+  if (b.status === 'escrow' || b.status === 'completed') return { authorizationUrl: null };
+  const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+  if (!PAYSTACK_SECRET_KEY) throw new HttpsError('failed-precondition', 'No Paystack secret');
+  let callbackUrl = process.env.PAYSTACK_CALLBACK_URL || '';
+  if (callbackUrl.includes('{bookingId}')) callbackUrl = callbackUrl.replace('{bookingId}', bookingId);
+  const initRes = await fetch('https://api.paystack.co/transaction/initialize', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: payerEmail, amount: Math.round((b.amount ?? 0) * 100), reference: bookingId, metadata: { bookingId }, ...(callbackUrl ? { callback_url: callbackUrl } : {}) }),
+  });
+  if (!initRes.ok) {
+    const t = await initRes.text();
+    logger.error('Paystack re-init failed', { t });
+    throw new HttpsError('internal', 'Failed to initialize payment');
+  }
+  const initJson: any = await initRes.json();
+  await ref.set({ paystack: { reference: bookingId, status: 'initialized' }, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { authorizationUrl: initJson.data?.authorization_url };
+});
+
 export const paystackWebhook = onRequest(async (req, res) => {
   const signature = req.get('x-paystack-signature') || '';
   const secret = process.env.PAYSTACK_WEBHOOK_SECRET || process.env.PAYSTACK_SECRET_KEY || '';

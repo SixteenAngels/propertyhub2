@@ -4,6 +4,7 @@ import { useRoute } from '@react-navigation/native';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function BookingDetailScreen() {
   const route = useRoute<any>();
@@ -18,11 +19,18 @@ export default function BookingDetailScreen() {
   }, [bookingId]);
   if (!booking) return <View style={styles.container}><Text>Loading...</Text></View>;
   const verify = async () => {
-    const fn = httpsCallable(getFunctions(), 'verifyBooking');
+    const fn = httpsCallable(getFunctions(), 'verifyBookingUser');
     const res: any = await fn({ bookingId });
     if (res?.data?.status) {
       const snap = await getDoc(doc(db, 'bookings', bookingId));
       if (snap.exists()) setBooking(snap.data());
+    }
+  };
+  const resume = async () => {
+    const fn = httpsCallable(getFunctions(), 'resumePayment');
+    const res: any = await fn({ bookingId, payerEmail: 'demo@example.com' });
+    if (res?.data?.authorizationUrl) {
+      await WebBrowser.openBrowserAsync(res.data.authorizationUrl);
     }
   };
 
@@ -39,6 +47,11 @@ export default function BookingDetailScreen() {
       <Pressable style={{ marginTop: 12, backgroundColor: '#2563eb', padding: 10, borderRadius: 10 }} onPress={verify}>
         <Text style={{ color: 'white', fontWeight: '700' }}>Verify Payment</Text>
       </Pressable>
+      {booking.status !== 'escrow' && (
+        <Pressable style={{ marginTop: 12, backgroundColor: '#111827', padding: 10, borderRadius: 10 }} onPress={resume}>
+          <Text style={{ color: 'white', fontWeight: '700' }}>Resume Payment</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
