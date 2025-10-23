@@ -8,7 +8,9 @@ type User = { id: string; role?: 'user'|'manager'|'admin'; email?: string };
 
 export default function AdminRolesScreen() {
   const [users, setUsers] = useState<User[]>([]);
-  const fn = httpsCallable(getFunctions(firebaseApp), 'setUserRole');
+  const fns = getFunctions(firebaseApp);
+  const setRoleFn = httpsCallable(fns, 'setUserRole');
+  const approveHostFn = httpsCallable(fns, 'approveHost');
 
   useEffect(() => {
     (async () => {
@@ -18,7 +20,7 @@ export default function AdminRolesScreen() {
   }, []);
 
   const setRole = async (uid: string, role: 'user'|'manager'|'admin') => {
-    await fn({ uid, role });
+    await setRoleFn({ uid, role });
   };
 
   return (
@@ -35,6 +37,12 @@ export default function AdminRolesScreen() {
                   <Text style={styles.btnText}>{r}</Text>
                 </Pressable>
               ))}
+              <Pressable style={[styles.btn, { backgroundColor: '#16a34a' }]} onPress={() => approveHostFn({ userId: item.id, canHost: true })}>
+                <Text style={styles.btnText}>Grant Host</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, { backgroundColor: '#dc2626' }]} onPress={() => approveHostFn({ userId: item.id, canHost: false })}>
+                <Text style={styles.btnText}>Revoke Host</Text>
+              </Pressable>
             </View>
           </View>
         )}

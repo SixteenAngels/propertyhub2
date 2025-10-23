@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Image, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, Image } from 'react-native';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import MapView, { Marker, MapPressEvent } from 'react-native-maps';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
@@ -139,22 +140,25 @@ export default function MyListingsScreen() {
       <TextInput placeholder="Amenities (comma separated)" value={amenities} onChangeText={setAmenities} style={styles.input} />
       {!!error && <Text style={{ color: '#dc2626' }}>{error}</Text>}
       {photoUris.length > 0 && (
-        <FlatList
-          data={photoUris}
-          keyExtractor={(u, i) => u + i}
-          horizontal
-          renderItem={({ item, index }) => (
-            <View style={{ marginRight: 8 }}>
-              <Image source={{ uri: item }} style={{ width: 100, height: 100, borderRadius: 10 }} />
-              {uploadProgress[index] != null && uploadProgress[index] > 0 && uploadProgress[index] < 100 && (
-                <Text style={{ textAlign: 'center', marginTop: 4 }}>{uploadProgress[index]}%</Text>
-              )}
-              <Pressable onPress={() => setPhotoUris((prev) => prev.filter((_, i) => i !== index))} style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 6, borderRadius: 8 }}>
-                <Text style={{ color: 'white' }}>X</Text>
+        <View style={{ height: 120 }}>
+          <DraggableFlatList
+            data={photoUris}
+            horizontal
+            keyExtractor={(u, i) => u + i}
+            onDragEnd={({ data }) => setPhotoUris(data)}
+            renderItem={({ item, index, drag }: RenderItemParams<string>) => (
+              <Pressable onLongPress={drag} style={{ marginRight: 8 }}>
+                <Image source={{ uri: item }} style={{ width: 100, height: 100, borderRadius: 10 }} />
+                {uploadProgress[index] != null && uploadProgress[index] > 0 && uploadProgress[index] < 100 && (
+                  <Text style={{ textAlign: 'center', marginTop: 4 }}>{uploadProgress[index]}%</Text>
+                )}
+                <Pressable onPress={() => setPhotoUris((prev) => prev.filter((_, i) => i !== index))} style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 6, borderRadius: 8 }}>
+                  <Text style={{ color: 'white' }}>X</Text>
+                </Pressable>
               </Pressable>
-            </View>
-          )}
-        />
+            )}
+          />
+        </View>
       )}
       <Pressable style={[styles.btn, { backgroundColor: '#111827' }]} onPress={pickImage}>
         <Text style={styles.btnText}>Pick Photo</Text>
