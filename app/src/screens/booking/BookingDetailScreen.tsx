@@ -30,6 +30,8 @@ export default function BookingDetailScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Booking {bookingId}</Text>
       <Text>Status: {booking.status}</Text>
+      {booking.status === 'escrow' && <Text style={{ color: '#16a34a', marginTop: 6 }}>Payment confirmed and funds held in escrow.</Text>}
+      {booking.status === 'failed' && <Text style={{ color: '#dc2626', marginTop: 6 }}>Payment failed. Try again.</Text>}
       <Text>Amount: ${booking.amount}</Text>
       {booking.startDate && booking.endDate && (
         <Text>Dates: {new Date(booking.startDate).toDateString()} - {new Date(booking.endDate).toDateString()}</Text>

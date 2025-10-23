@@ -4,7 +4,7 @@ import { collectionGroup, onSnapshot, orderBy, query } from 'firebase/firestore'
 import { db } from '../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-type Msg = { id: string; message: string; timestamp?: any; chatId: string };
+type Msg = { id: string; message: string; timestamp?: any; chatId: string; senderId?: string };
 
 export default function ModerationScreen() {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -25,8 +25,8 @@ export default function ModerationScreen() {
           <Text numberOfLines={1}>{item.message}</Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
             <Pressable style={styles.btn} onPress={() => flagFn({ chatId: item.chatId, messageId: item.id, reason: 'Inappropriate' })}><Text style={styles.btnText}>Flag</Text></Pressable>
-            <Pressable style={[styles.btn, { backgroundColor: '#f59e0b' }]} onPress={() => muteFn({ userId: 'TODO', until: Date.now() + 3600000 })}><Text style={styles.btnText}>Mute</Text></Pressable>
-            <Pressable style={[styles.btn, { backgroundColor: '#dc2626' }]} onPress={() => blockFn({ userId: 'TODO', blocked: true })}><Text style={styles.btnText}>Block</Text></Pressable>
+            <Pressable style={[styles.btn, { backgroundColor: '#f59e0b' }]} onPress={() => muteFn({ userId: item.senderId, until: Date.now() + 3600000 })}><Text style={styles.btnText}>Mute</Text></Pressable>
+            <Pressable style={[styles.btn, { backgroundColor: '#dc2626' }]} onPress={() => blockFn({ userId: item.senderId, blocked: true })}><Text style={styles.btnText}>Block</Text></Pressable>
           </View>
         </View>
       )} />

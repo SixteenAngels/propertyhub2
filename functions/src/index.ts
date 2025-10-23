@@ -268,11 +268,12 @@ export const onMessageCreate = onDocumentCreated('chats/{chatId}/messages/{messa
   }, { merge: true });
   const tokens = await getUserTokens(receiverId);
   if (!tokens.length) return;
-  await messaging.sendEachForMulticast({
+  const resp = await messaging.sendEachForMulticast({
     tokens,
     notification: { title: 'New message', body: msg.message?.slice(0, 120) ?? 'You have a new message' },
     data: { type: 'chat', chatId: event.params?.chatId ?? '' },
   });
+  await pruneInvalidTokens(receiverId, tokens, resp);
 });
 
 export const sendMessage = onCall(async (request) => {
@@ -332,7 +333,9 @@ export const flagMessage = onCall(async (request) => {
   if (!uid) throw new HttpsError('unauthenticated', 'Authentication required');
   const { chatId, messageId, reason } = request.data as { chatId: string; messageId: string; reason?: string };
   if (!chatId || !messageId) throw new HttpsError('invalid-argument', 'chatId and messageId required');
-  await db.collection('moderationFlags').add({ chatId, messageId, reason: reason ?? null, reporterId: uid, createdAt: FieldValue.serverTimestamp() });
+  // capture sender for moderation
+  const msg = await db.collection('chats').doc(chatId).collection('messages').doc(messageId).get();
+  await db.collection('moderationFlags').add({ chatId, messageId, senderId: msg.data()?.senderId ?? null, reason: reason ?? null, reporterId: uid, createdAt: FieldValue.serverTimestamp() });
   return { ok: true };
 });
 
