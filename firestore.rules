@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function userRole() {
+      return get(/databases/$(db)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() { return userRole() == "admin"; }
+    function isManager() { return userRole() == "manager"; }
+    function isOwner(ownerId) { return request.auth != null && request.auth.uid == ownerId; }
+
+    match /users/{uid} {
+      allow read: if isAdmin() || request.auth.uid == uid;
+      allow write: if isAdmin() || request.auth.uid == uid;
+    }
+
+    match /properties/{pid} {
+      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == "pending"
+        && get(/databases/$(db)/documents/users/$(request.auth.uid)).data.canHost == true;
+      allow read: if resource.data.status == "approved" || isAdmin() || isManager() || isOwner(resource.data.ownerId);
+      // Owners can only update unapproved listings and cannot set status directly
+      allow update: if isOwner(resource.data.ownerId) && resource.data.status == "pending"
+        && !('status' in request.resource.data);
+      allow update: if isManager() || isAdmin();
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+
+    match /bookings/{bid} {
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin() || isManager() || isOwner(resource.data.userId) || isOwner(resource.data.ownerId);
+      allow update: if isAdmin() || isManager();
+    }
+
+    match /chats/{cid} {
+      allow read: if isAdmin() || isManager() || (request.auth != null && request.auth.uid in resource.data.participants);
+      allow write: if request.auth != null && request.auth.uid in resource.data.participants
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage','lastMessageAt','typing','lastRead']);
+      match /messages/{mid} {
+        allow read: if isAdmin() || isManager() || (request.auth != null && request.auth.uid in get(/databases/$(db)/documents/chats/$(cid)).data.participants);
+        allow create: if request.auth != null && request.auth.uid in get(/databases/$(db)/documents/chats/$(cid)).data.participants
+          && request.resource.data.keys().hasOnly(['senderId','receiverId','message','timestamp','readBy'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.message is string && request.resource.data.message.size() <= 1000;
+        allow update, delete: if false; // immutable messages for MVP
+      }
+    }
+
+    match /moderationFlags/{id} {
+      allow create: if request.auth != null; // any authenticated user can flag
+      allow read: if isAdmin() || isManager();
+      allow delete, update: if isAdmin();
+    }
+  }
+}

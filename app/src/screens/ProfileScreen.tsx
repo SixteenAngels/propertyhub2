@@ -1,0 +1,71 @@
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { registerForPushNotificationsAsync } from '../services/notifications';
+import { auth, db } from '../config/firebase';
+import { arrayUnion, doc, setDoc } from 'firebase/firestore';
+import { useNavigation } from '@react-navigation/native';
+import { useUserRole } from '../hooks/useUserRole';
+import { httpsCallable, getFunctions } from 'firebase/functions';
+
+export default function ProfileScreen() {
+  const nav = useNavigation<any>();
+  const role = useUserRole();
+  const requestHost = async () => {
+    if (!auth.currentUser) return;
+    // For MVP, just notify admin to approve; could write a request doc
+    alert('Please contact admin/manager to enable hosting on your account.');
+  };
+  useEffect(() => {
+    registerForPushNotificationsAsync().then((token) => {
+      // In MVP, you would store token in Firestore under users/{uid}
+      if (token && auth.currentUser) {
+        const ref = doc(db, 'users', auth.currentUser.uid);
+        setDoc(ref, { fcmTokens: arrayUnion(token) }, { merge: true });
+      }
+    });
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      <Text>Profile (stub)</Text>
+      {(role === 'manager' || role === 'admin') && (
+        <Pressable style={styles.btn} onPress={() => nav.navigate('Approvals')}>
+          <Text style={styles.btnText}>Open Approvals</Text>
+        </Pressable>
+      )}
+      <Pressable style={[styles.btn, { backgroundColor: '#2563eb' }]} onPress={() => nav.navigate('Auth')}>
+        <Text style={styles.btnText}>Sign in options</Text>
+      </Pressable>
+      {role === 'admin' && (
+        <>
+          <Pressable style={[styles.btn, { backgroundColor: '#0f766e' }]} onPress={() => nav.navigate('AdminRoles')}>
+            <Text style={styles.btnText}>Admin: Assign Roles</Text>
+          </Pressable>
+          <Pressable style={[styles.btn, { backgroundColor: '#6d28d9' }]} onPress={() => nav.navigate('EscrowConsole')}>
+            <Text style={styles.btnText}>Admin: Escrow Console</Text>
+          </Pressable>
+        </>
+      )}
+      {(role === 'manager' || role === 'admin') && (
+        <Pressable style={[styles.btn, { backgroundColor: '#9333ea' }]} onPress={() => nav.navigate('Moderation')}>
+          <Text style={styles.btnText}>Manager: Moderation</Text>
+        </Pressable>
+      )}
+      <Pressable style={[styles.btn, { backgroundColor: '#f97316' }]} onPress={() => nav.navigate('MyBookings')}>
+        <Text style={styles.btnText}>My Bookings</Text>
+      </Pressable>
+      {role !== 'admin' && role !== 'manager' && (
+        <Pressable style={[styles.btn, { backgroundColor: '#16a34a' }]} onPress={requestHost}>
+          <Text style={styles.btnText}>Request Hosting Permission</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  btn: { marginTop: 16, backgroundColor: '#111827', padding: 12, borderRadius: 10 },
+  btnText: { color: 'white', fontWeight: '700' }
+});
+

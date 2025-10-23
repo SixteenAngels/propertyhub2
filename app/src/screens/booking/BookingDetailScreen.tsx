@@ -1,0 +1,72 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { useRoute } from '@react-navigation/native';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import * as WebBrowser from 'expo-web-browser';
+
+export default function BookingDetailScreen() {
+  const route = useRoute<any>();
+  const { bookingId, autoVerify } = route.params ?? {};
+  const [booking, setBooking] = useState<any>(null);
+  useEffect(() => {
+    (async () => {
+      if (!bookingId) return;
+      const snap = await getDoc(doc(db, 'bookings', bookingId));
+      if (snap.exists()) setBooking(snap.data());
+    })();
+  }, [bookingId]);
+  useEffect(() => {
+    if (!autoVerify) return;
+    verify();
+  }, [autoVerify]);
+  if (!booking) return <View style={styles.container}><Text>Loading...</Text></View>;
+  const verify = async () => {
+    const fn = httpsCallable(getFunctions(), 'verifyBookingUser');
+    const res: any = await fn({ bookingId });
+    if (res?.data?.status) {
+      const snap = await getDoc(doc(db, 'bookings', bookingId));
+      if (snap.exists()) setBooking(snap.data());
+    }
+  };
+  const resume = async () => {
+    const fn = httpsCallable(getFunctions(), 'resumePayment');
+    const res: any = await fn({ bookingId, payerEmail: 'demo@example.com' });
+    if (res?.data?.authorizationUrl) {
+      await WebBrowser.openBrowserAsync(res.data.authorizationUrl);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Booking {bookingId}</Text>
+      <Text>Status: {booking.status}</Text>
+      {booking.status === 'escrow' && <Text style={{ color: '#16a34a', marginTop: 6 }}>Payment confirmed and funds held in escrow.</Text>}
+      {booking.status === 'failed' && <Text style={{ color: '#dc2626', marginTop: 6 }}>Payment failed. Try again.</Text>}
+      <Text>Amount: ${booking.amount}</Text>
+      {booking.startDate && booking.endDate && (
+        <Text>Dates: {new Date(booking.startDate).toDateString()} - {new Date(booking.endDate).toDateString()}</Text>
+      )}
+      <Pressable style={{ marginTop: 12, backgroundColor: '#2563eb', padding: 10, borderRadius: 10 }} onPress={verify}>
+        <Text style={{ color: 'white', fontWeight: '700' }}>Verify Payment</Text>
+      </Pressable>
+      {booking.status !== 'escrow' && (
+        <Pressable style={{ marginTop: 12, backgroundColor: '#111827', padding: 10, borderRadius: 10 }} onPress={resume}>
+          <Text style={{ color: 'white', fontWeight: '700' }}>Resume Payment</Text>
+        </Pressable>
+      )}
+      {booking.status === 'pending' && (
+        <Pressable style={{ marginTop: 12, backgroundColor: '#dc2626', padding: 10, borderRadius: 10 }} onPress={() => setBooking({ ...booking, status: 'cancelled' })}>
+          <Text style={{ color: 'white', fontWeight: '700' }}>Cancel</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 16 },
+  title: { fontWeight: '700', fontSize: 18, marginBottom: 8 },
+});
+
