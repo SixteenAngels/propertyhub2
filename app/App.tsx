@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
+import * as Linking from 'expo-linking';
 import { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -66,7 +67,14 @@ export default function App() {
     return () => unsub();
   }, []);
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={{
+      prefixes: [Linking.createURL('/')],
+      config: {
+        screens: {
+          BookingDetail: 'booking/:bookingId',
+        }
+      }
+    }}>
       <RootStack.Navigator>
         <RootStack.Screen name="Root" component={Tabs} options={{ headerShown: false }} />
         <RootStack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign in' }} />

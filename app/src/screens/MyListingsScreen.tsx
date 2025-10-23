@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Image } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, Pressable, Image, FlatList } from 'react-native';
 import MapView, { Marker, MapPressEvent } from 'react-native-maps';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import * as ImagePicker from 'expo-image-picker';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { storage } from '../config/firebase';
 import { reverseGeocode } from '../services/geocoding';
 
@@ -13,8 +13,19 @@ export default function MyListingsScreen() {
   const [price, setPrice] = useState('');
   const [type, setType] = useState<'Sell'|'Rent'|'Lease'|'Stay'>('Rent');
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUris, setPhotoUris] = useState<string[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number[]>([]);
   const [address, setAddress] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [myListings, setMyListings] = useState<any[]>([]);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const ql = query(collection(db, 'properties'), where('ownerId', '==', uid));
+    const unsub = onSnapshot(ql, (snap) => setMyListings(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))));
+    return () => unsub();
+  }, []);
 
   const onMapPress = (e: MapPressEvent) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
@@ -22,43 +33,88 @@ export default function MyListingsScreen() {
   };
 
   const submit = async () => {
-    let photos: string[] = [];
-    if (photoUri) {
-      const blob = await (await fetch(photoUri)).blob();
-      const key = `user_uploads/${auth.currentUser?.uid ?? 'demo'}/${Date.now()}.jpg`;
-      const r = ref(storage, key);
-      await uploadBytes(r, blob);
-      const url = await getDownloadURL(r);
-      photos = [url];
+    const photos: string[] = [];
+    if (photoUris.length) {
+      const progresses = photoUris.map(() => 0);
+      setUploadProgress(progresses);
+      await Promise.all(
+        photoUris.map(async (uri, idx) => {
+          const blob = await (await fetch(uri)).blob();
+          const key = `user_uploads/${auth.currentUser?.uid ?? 'demo'}/${Date.now()}_${idx}.jpg`;
+          const r = ref(storage, key);
+          await new Promise<void>((resolve, reject) => {
+            const task = uploadBytesResumable(r, blob);
+            task.on('state_changed', (snap) => {
+              const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+              setUploadProgress((prev) => {
+                const next = [...prev];
+                next[idx] = pct;
+                return next;
+              });
+            }, reject, async () => {
+              const url = await getDownloadURL(r);
+              photos.push(url);
+              resolve();
+            });
+          });
+        })
+      );
     }
     let addr: string | null = address;
     if (!addr && location) {
       addr = await reverseGeocode(location.lat, location.lng);
       setAddress(addr);
     }
-    await addDoc(collection(db, 'properties'), {
-      ownerId: auth.currentUser?.uid ?? 'demo',
-      title,
-      price: Number(price) || 0,
-      type,
-      description: addr ?? '',
-      photos,
-      location,
-      status: 'pending',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    if (editingId) {
+      await updateDoc(doc(db, 'properties', editingId), {
+        title,
+        price: Number(price) || 0,
+        type,
+        description: addr ?? '',
+        photos: photos.length ? photos : undefined,
+        location,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await addDoc(collection(db, 'properties'), {
+        ownerId: auth.currentUser?.uid ?? 'demo',
+        title,
+        price: Number(price) || 0,
+        type,
+        description: addr ?? '',
+        photos,
+        location,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
     setTitle('');
     setPrice('');
     setLocation(null);
-    setPhotoUri(null);
+    setPhotoUris([]);
+    setUploadProgress([]);
+    setEditingId(null);
   };
 
   const pickImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (perm.status !== 'granted') return;
-    const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.8, mediaTypes: ImagePicker.MediaTypeOptions.Images });
-    if (!res.canceled && res.assets?.length) setPhotoUri(res.assets[0].uri);
+    const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.8, mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, selectionLimit: 5 });
+    if (!res.canceled && res.assets?.length) setPhotoUris((prev) => [...prev, ...res.assets.map((a) => a.uri)]);
+  };
+
+  const loadForEdit = (item: any) => {
+    setEditingId(item.id);
+    setTitle(item.title ?? '');
+    setPrice(String(item.price ?? ''));
+    setAddress(item.description ?? null);
+    setLocation(item.location ?? null);
+    setPhotoUris(item.photos ?? []);
+  };
+
+  const deleteListing = async (id: string) => {
+    await deleteDoc(doc(db, 'properties', id));
   };
 
   return (
@@ -71,13 +127,46 @@ export default function MyListingsScreen() {
           {location && <Marker coordinate={{ latitude: location.lat, longitude: location.lng }} />}
         </MapView>
       </View>
-      {photoUri && <Image source={{ uri: photoUri }} style={{ height: 120, borderRadius: 10 }} />}
+      {photoUris.length > 0 && (
+        <FlatList
+          data={photoUris}
+          keyExtractor={(u, i) => u + i}
+          horizontal
+          renderItem={({ item, index }) => (
+            <View style={{ marginRight: 8 }}>
+              <Image source={{ uri: item }} style={{ width: 100, height: 100, borderRadius: 10 }} />
+              {uploadProgress[index] != null && uploadProgress[index] > 0 && uploadProgress[index] < 100 && (
+                <Text style={{ textAlign: 'center', marginTop: 4 }}>{uploadProgress[index]}%</Text>
+              )}
+            </View>
+          )}
+        />
+      )}
       <Pressable style={[styles.btn, { backgroundColor: '#111827' }]} onPress={pickImage}>
         <Text style={styles.btnText}>Pick Photo</Text>
       </Pressable>
       <Pressable style={styles.btn} onPress={submit}>
-        <Text style={styles.btnText}>Submit for Approval</Text>
+        <Text style={styles.btnText}>{editingId ? 'Save Changes' : 'Submit for Approval'}</Text>
       </Pressable>
+
+      <Text style={[styles.header, { marginTop: 16 }]}>My Listings</Text>
+      <FlatList
+        data={myListings}
+        keyExtractor={(i) => i.id}
+        renderItem={({ item }) => (
+          <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+            <Text style={{ fontWeight: '600' }}>{item.title} • {item.status}</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+              <Pressable style={[styles.btn, { backgroundColor: '#1f2937' }]} onPress={() => loadForEdit(item)}>
+                <Text style={styles.btnText}>Edit</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, { backgroundColor: '#dc2626' }]} onPress={() => deleteListing(item.id)}>
+                <Text style={styles.btnText}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+      />
     </View>
   );
 }

@@ -18,7 +18,9 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.status == "pending";
       allow read: if resource.data.status == "approved" || isAdmin() || isManager() || isOwner(resource.data.ownerId);
-      allow update: if isOwner(resource.data.ownerId) && (!('status' in request.resource.data) || resource.data.status == "pending");
+      // Owners can only update unapproved listings and cannot set status directly
+      allow update: if isOwner(resource.data.ownerId) && resource.data.status == "pending"
+        && !('status' in request.resource.data);
       allow update: if isManager() || isAdmin();
       allow delete: if isOwner(resource.data.ownerId) || isAdmin();
     }

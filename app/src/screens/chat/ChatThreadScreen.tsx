@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, setDoc, doc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 
 type Message = { id: string; senderId: string; receiverId: string; message: string; timestamp: any };
@@ -13,6 +13,7 @@ export default function ChatThreadScreen() {
   const [text, setText] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useMemo(() => collection(db, 'chats', chatId, 'messages'), [chatId]);
+  const chatRef = useMemo(() => doc(db, 'chats', chatId), [chatId]);
 
   useEffect(() => {
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
@@ -22,8 +23,9 @@ export default function ChatThreadScreen() {
 
   const send = async () => {
     if (!text.trim()) return;
-    // Demo: receiver is placeholder
-    await addDoc(messagesRef, { senderId: demoUid, receiverId: 'other', message: text.trim(), timestamp: serverTimestamp() });
+    // Demo receiver: mark as 'other' if not present; in real flow choose the other participant from chat doc
+    await addDoc(messagesRef, { senderId: demoUid, receiverId: 'other', message: text.trim(), timestamp: serverTimestamp(), readBy: [demoUid] });
+    await updateDoc(chatRef, { lastMessage: text.trim(), lastMessageAt: serverTimestamp() });
     setText('');
   };
 
