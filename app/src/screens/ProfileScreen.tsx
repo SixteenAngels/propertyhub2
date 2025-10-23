@@ -5,10 +5,16 @@ import { auth, db } from '../config/firebase';
 import { arrayUnion, doc, setDoc } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import { useUserRole } from '../hooks/useUserRole';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 
 export default function ProfileScreen() {
   const nav = useNavigation<any>();
   const role = useUserRole();
+  const requestHost = async () => {
+    if (!auth.currentUser) return;
+    // For MVP, just notify admin to approve; could write a request doc
+    alert('Please contact admin/manager to enable hosting on your account.');
+  };
   useEffect(() => {
     registerForPushNotificationsAsync().then((token) => {
       // In MVP, you would store token in Firestore under users/{uid}
@@ -48,6 +54,11 @@ export default function ProfileScreen() {
       <Pressable style={[styles.btn, { backgroundColor: '#f97316' }]} onPress={() => nav.navigate('MyBookings')}>
         <Text style={styles.btnText}>My Bookings</Text>
       </Pressable>
+      {role !== 'admin' && role !== 'manager' && (
+        <Pressable style={[styles.btn, { backgroundColor: '#16a34a' }]} onPress={requestHost}>
+          <Text style={styles.btnText}>Request Hosting Permission</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

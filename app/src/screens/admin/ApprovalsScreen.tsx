@@ -18,7 +18,8 @@ export default function ApprovalsScreen() {
   }, []);
 
   const update = async (propertyId: string, status: 'approved' | 'rejected') => {
-    await approveFn({ propertyId, status });
+    const reason = status === 'rejected' ? 'Insufficient details' : undefined;
+    await approveFn({ propertyId, status, reason });
   };
 
   return (

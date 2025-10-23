@@ -68,7 +68,7 @@ export const setUserRole = onCall(async (request) => {
 });
 export const approveListing = onCall(async (request) => {
     await requireRole({ auth: request.auth }, ['admin', 'manager']);
-    const { propertyId, status } = request.data;
+    const { propertyId, status, reason } = request.data;
     if (!propertyId || !status)
         throw new HttpsError('invalid-argument', 'propertyId and status required');
     const ref = db.collection('properties').doc(propertyId);
@@ -76,7 +76,7 @@ export const approveListing = onCall(async (request) => {
     if (!snap.exists)
         throw new HttpsError('not-found', 'Property not found');
     const ownerId = snap.data().ownerId;
-    await ref.set({ status, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await ref.set({ status, updatedAt: FieldValue.serverTimestamp(), rejectionReason: status === 'rejected' ? (reason ?? null) : null }, { merge: true });
     // Notify owner
     const tokens = await getUserTokens(ownerId);
     if (tokens.length) {
@@ -84,12 +84,20 @@ export const approveListing = onCall(async (request) => {
             tokens,
             notification: {
                 title: status === 'approved' ? 'Listing approved' : 'Listing rejected',
-                body: snap.data()?.title ?? 'Your listing status was updated',
+                body: status === 'rejected' ? (reason ?? 'Your listing was rejected') : (snap.data()?.title ?? 'Your listing status was updated'),
             },
             data: { type: 'listing_status', propertyId, status },
         });
         await pruneInvalidTokens(ownerId, tokens, resp);
     }
+    return { ok: true };
+});
+export const approveHost = onCall(async (request) => {
+    await requireRole({ auth: request.auth }, ['admin', 'manager']);
+    const { userId, canHost } = request.data;
+    if (!userId)
+        throw new HttpsError('invalid-argument', 'userId required');
+    await db.collection('users').doc(userId).set({ canHost: !!canHost }, { merge: true });
     return { ok: true };
 });
 export const createBooking = onCall(async (request) => {
