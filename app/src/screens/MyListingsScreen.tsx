@@ -4,7 +4,7 @@ import MapView, { Marker, MapPressEvent } from 'react-native-maps';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import * as ImagePicker from 'expo-image-picker';
-import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { storage } from '../config/firebase';
 import { reverseGeocode } from '../services/geocoding';
 
@@ -148,6 +148,9 @@ export default function MyListingsScreen() {
               {uploadProgress[index] != null && uploadProgress[index] > 0 && uploadProgress[index] < 100 && (
                 <Text style={{ textAlign: 'center', marginTop: 4 }}>{uploadProgress[index]}%</Text>
               )}
+              <Pressable onPress={() => setPhotoUris((prev) => prev.filter((_, i) => i !== index))} style={{ position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 6, borderRadius: 8 }}>
+                <Text style={{ color: 'white' }}>X</Text>
+              </Pressable>
             </View>
           )}
         />

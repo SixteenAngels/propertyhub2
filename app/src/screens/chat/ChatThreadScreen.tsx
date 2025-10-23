@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, setDoc, doc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, setDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -25,6 +25,16 @@ export default function ChatThreadScreen() {
     return () => unsub();
   }, [messagesRef]);
 
+  useEffect(() => {
+    // mark as read for current user
+    (async () => {
+      const c = await getDoc(chatRef);
+      if (!c.exists()) return;
+      // naive: no per-message updates to keep rules simple; could keep lastReadTimestamp per user
+      await updateDoc(chatRef, { [`lastRead.${demoUid}`]: serverTimestamp() } as any);
+    })();
+  }, [chatRef]);
+
   const send = async () => {
     if (!text.trim()) return;
     await sendMessageFn({ chatId, message: text.trim() });
@@ -45,6 +55,7 @@ export default function ChatThreadScreen() {
         renderItem={({ item }) => (
           <View style={[styles.bubble, item.senderId === demoUid ? styles.bubbleMe : styles.bubbleOther]}>
             <Text style={styles.msgText}>{item.message}</Text>
+            {item.readBy?.includes?.(demoUid) && <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>Read</Text>}
           </View>
         )}
         contentContainerStyle={{ padding: 12 }}

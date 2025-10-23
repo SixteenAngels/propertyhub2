@@ -26,8 +26,7 @@ service cloud.firestore {
     }
 
     match /bookings/{bid} {
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
-        && request.time - resource.data.createdAt > duration.value(1, 'seconds'); // rudimentary rate limit
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow read: if isAdmin() || isManager() || isOwner(resource.data.userId) || isOwner(resource.data.ownerId);
       allow update: if isAdmin() || isManager();
     }

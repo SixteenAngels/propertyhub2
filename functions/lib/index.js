@@ -27,6 +27,19 @@ async function getUserTokens(userId) {
     const tokens = (snap.data()?.fcmTokens ?? []);
     return Array.isArray(tokens) ? tokens : [];
 }
+async function pruneInvalidTokens(userId, tokens, response) {
+    try {
+        const invalid = [];
+        response.responses?.forEach((r, idx) => {
+            if (!r.success)
+                invalid.push(tokens[idx]);
+        });
+        if (invalid.length) {
+            await db.collection('users').doc(userId).set({ fcmTokens: FieldValue.arrayRemove(...invalid) }, { merge: true });
+        }
+    }
+    catch { }
+}
 export const onPropertyCreate = onDocumentCreated('properties/{propertyId}', async (event) => {
     const snap = event.data;
     if (!snap)
@@ -67,7 +80,7 @@ export const approveListing = onCall(async (request) => {
     // Notify owner
     const tokens = await getUserTokens(ownerId);
     if (tokens.length) {
-        await messaging.sendEachForMulticast({
+        const resp = await messaging.sendEachForMulticast({
             tokens,
             notification: {
                 title: status === 'approved' ? 'Listing approved' : 'Listing rejected',
@@ -75,6 +88,7 @@ export const approveListing = onCall(async (request) => {
             },
             data: { type: 'listing_status', propertyId, status },
         });
+        await pruneInvalidTokens(ownerId, tokens, resp);
     }
     return { ok: true };
 });
@@ -129,7 +143,10 @@ export const createBooking = onCall(async (request) => {
         logger.warn('PAYSTACK_SECRET_KEY not set; returning mock reference');
         return { bookingId, reference: `mock_${bookingId}`, authorizationUrl: 'about:blank' };
     }
-    const callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
+    let callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
+    if (callbackUrl && callbackUrl.includes('{bookingId}')) {
+        callbackUrl = callbackUrl.replace('{bookingId}', bookingId);
+    }
     const initRes = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
@@ -152,6 +169,26 @@ export const createBooking = onCall(async (request) => {
     const initJson = await initRes.json();
     await bookingRef.set({ paystack: { reference: bookingId, status: 'initialized' } }, { merge: true });
     return { bookingId, reference: bookingId, authorizationUrl: initJson.data?.authorization_url };
+});
+export const verifyBooking = onCall(async (request) => {
+    await requireRole({ auth: request.auth }, ['admin', 'manager']);
+    const { bookingId } = request.data;
+    if (!bookingId)
+        throw new HttpsError('invalid-argument', 'bookingId required');
+    const ref = db.collection('bookings').doc(bookingId);
+    const snap = await ref.get();
+    if (!snap.exists)
+        throw new HttpsError('not-found', 'Booking not found');
+    const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+    if (!PAYSTACK_SECRET_KEY)
+        throw new HttpsError('failed-precondition', 'No Paystack secret');
+    const resp = await fetch(`https://api.paystack.co/transaction/verify/${bookingId}`, { headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` } });
+    const json = await resp.json();
+    const status = json?.data?.status;
+    if (status === 'success') {
+        await ref.set({ status: 'escrow', escrowStatus: 'held', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    return { status };
 });
 export const paystackWebhook = onRequest(async (req, res) => {
     const signature = req.get('x-paystack-signature') || '';
@@ -235,6 +272,62 @@ export const onMessageCreate = onDocumentCreated('chats/{chatId}/messages/{messa
         data: { type: 'chat', chatId: event.params?.chatId ?? '' },
     });
 });
+export const sendMessage = onCall(async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new HttpsError('unauthenticated', 'Authentication required');
+    const { chatId, message } = request.data;
+    if (!chatId || !message || typeof message !== 'string' || message.length > 1000) {
+        throw new HttpsError('invalid-argument', 'Invalid message');
+    }
+    const chatRef = db.collection('chats').doc(chatId);
+    const chatSnap = await chatRef.get();
+    if (!chatSnap.exists)
+        throw new HttpsError('not-found', 'Chat not found');
+    const chat = chatSnap.data();
+    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+    if (!participants.includes(uid))
+        throw new HttpsError('permission-denied', 'Not a participant');
+    // Rate limit: at most 1 message per 500ms per user per chat
+    const recentSnap = await db.collection('chats').doc(chatId)
+        .collection('messages')
+        .where('senderId', '==', uid)
+        .orderBy('timestamp', 'desc')
+        .limit(1)
+        .get();
+    const now = Date.now();
+    const last = recentSnap.docs[0]?.data()?.timestamp?.toMillis?.() ?? 0;
+    if (now - last < 500)
+        throw new HttpsError('resource-exhausted', 'Slow down');
+    const other = participants.find((p) => p !== uid) ?? undefined;
+    await db.collection('chats').doc(chatId).collection('messages').add({
+        senderId: uid,
+        receiverId: other ?? null,
+        message,
+        timestamp: FieldValue.serverTimestamp(),
+        readBy: [uid],
+    });
+    await chatRef.set({ lastMessage: message, lastMessageAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { ok: true };
+});
+export const setTyping = onCall(async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new HttpsError('unauthenticated', 'Authentication required');
+    const { chatId, typing } = request.data;
+    if (!chatId)
+        throw new HttpsError('invalid-argument', 'chatId required');
+    const chatRef = db.collection('chats').doc(chatId);
+    const chatSnap = await chatRef.get();
+    if (!chatSnap.exists)
+        throw new HttpsError('not-found', 'Chat not found');
+    const chat = chatSnap.data();
+    const participants = Array.isArray(chat.participants) ? chat.participants : [];
+    if (!participants.includes(uid))
+        throw new HttpsError('permission-denied', 'Not a participant');
+    await chatRef.set({ typing: { ...(chat.typing ?? {}), [uid]: !!typing } }, { merge: true });
+    return { ok: true };
+});
 export const flagMessage = onCall(async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
@@ -243,5 +336,21 @@ export const flagMessage = onCall(async (request) => {
     if (!chatId || !messageId)
         throw new HttpsError('invalid-argument', 'chatId and messageId required');
     await db.collection('moderationFlags').add({ chatId, messageId, reason: reason ?? null, reporterId: uid, createdAt: FieldValue.serverTimestamp() });
+    return { ok: true };
+});
+export const muteUser = onCall(async (request) => {
+    await requireRole({ auth: request.auth }, ['admin', 'manager']);
+    const { userId, until } = request.data;
+    if (!userId)
+        throw new HttpsError('invalid-argument', 'userId required');
+    await db.collection('users').doc(userId).set({ mutedUntil: until ?? null }, { merge: true });
+    return { ok: true };
+});
+export const blockUser = onCall(async (request) => {
+    await requireRole({ auth: request.auth }, ['admin', 'manager']);
+    const { userId, blocked } = request.data;
+    if (!userId)
+        throw new HttpsError('invalid-argument', 'userId required');
+    await db.collection('users').doc(userId).set({ blocked: !!blocked }, { merge: true });
     return { ok: true };
 });
