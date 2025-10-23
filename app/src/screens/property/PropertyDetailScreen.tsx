@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { collection, doc, getDoc, getDocs, query, setDoc, where, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { db, auth } from '../../config/firebase';
 import * as WebBrowser from 'expo-web-browser';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -55,7 +55,8 @@ export default function PropertyDetailScreen() {
   const contactOwner = async () => {
     if (!propertyId || !prop) return;
     // chat id per property between current user and owner
-    const participants = [prop.ownerId, (firebaseApp as any).auth?.currentUser?.uid].filter(Boolean);
+    const uid = auth.currentUser?.uid;
+    const participants = [prop.ownerId, uid].filter(Boolean);
     const chatQ = query(collection(db, 'chats'), where('propertyId', '==', propertyId));
     const existing = await getDocs(chatQ);
     const first = existing.docs[0];

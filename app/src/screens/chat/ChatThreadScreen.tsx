@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidin
 import { useRoute } from '@react-navigation/native';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, setDoc, doc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 type Message = { id: string; senderId: string; receiverId: string; message: string; timestamp: any };
 const demoUid = auth.currentUser?.uid ?? 'demo';
@@ -14,6 +15,9 @@ export default function ChatThreadScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useMemo(() => collection(db, 'chats', chatId, 'messages'), [chatId]);
   const chatRef = useMemo(() => doc(db, 'chats', chatId), [chatId]);
+  const functions = useMemo(() => getFunctions(), []);
+  const sendMessageFn = useMemo(() => httpsCallable(functions, 'sendMessage'), [functions]);
+  const setTypingFn = useMemo(() => httpsCallable(functions, 'setTyping'), [functions]);
 
   useEffect(() => {
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
@@ -23,11 +27,15 @@ export default function ChatThreadScreen() {
 
   const send = async () => {
     if (!text.trim()) return;
-    // Demo receiver: mark as 'other' if not present; in real flow choose the other participant from chat doc
-    await addDoc(messagesRef, { senderId: demoUid, receiverId: 'other', message: text.trim(), timestamp: serverTimestamp(), readBy: [demoUid] });
-    await updateDoc(chatRef, { lastMessage: text.trim(), lastMessageAt: serverTimestamp() });
+    await sendMessageFn({ chatId, message: text.trim() });
     setText('');
   };
+
+  useEffect(() => {
+    setTypingFn({ chatId, typing: true });
+    const t = setTimeout(() => setTypingFn({ chatId, typing: false }), 800);
+    return () => clearTimeout(t);
+  }, [text]);
 
   return (
     <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', android: undefined })} style={styles.container}>

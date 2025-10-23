@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import * as Linking from 'expo-linking';
+import { useNavigationContainerRef } from '@react-navigation/native';
 import { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -66,8 +67,20 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+  const navRef = useNavigationContainerRef();
+  useEffect(() => {
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      const { hostname, path, queryParams } = Linking.parse(url);
+      // propertyapp://booking/<id>
+      const segments = (path ?? '').split('/');
+      if (segments[0] === 'booking' && segments[1]) {
+        navRef.navigate('BookingDetail' as never, { bookingId: segments[1] } as never);
+      }
+    });
+    return () => sub.remove();
+  }, []);
   return (
-    <NavigationContainer linking={{
+    <NavigationContainer ref={navRef} linking={{
       prefixes: [Linking.createURL('/')],
       config: {
         screens: {

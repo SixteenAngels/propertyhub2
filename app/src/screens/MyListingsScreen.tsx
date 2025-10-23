@@ -18,6 +18,8 @@ export default function MyListingsScreen() {
   const [address, setAddress] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [myListings, setMyListings] = useState<any[]>([]);
+  const [amenities, setAmenities] = useState<string>('');
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -33,6 +35,9 @@ export default function MyListingsScreen() {
   };
 
   const submit = async () => {
+    setError('');
+    if (!title.trim() || !price) { setError('Title and price are required'); return; }
+    if (!location) { setError('Please drop a pin on the map'); return; }
     const photos: string[] = [];
     if (photoUris.length) {
       const progresses = photoUris.map(() => 0);
@@ -73,6 +78,7 @@ export default function MyListingsScreen() {
         description: addr ?? '',
         photos: photos.length ? photos : undefined,
         location,
+        amenities: amenities.split(',').map((s) => s.trim()).filter(Boolean),
         updatedAt: serverTimestamp(),
       });
     } else {
@@ -84,6 +90,7 @@ export default function MyListingsScreen() {
         description: addr ?? '',
         photos,
         location,
+        amenities: amenities.split(',').map((s) => s.trim()).filter(Boolean),
         status: 'pending',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -95,6 +102,7 @@ export default function MyListingsScreen() {
     setPhotoUris([]);
     setUploadProgress([]);
     setEditingId(null);
+    setAmenities('');
   };
 
   const pickImage = async () => {
@@ -127,6 +135,8 @@ export default function MyListingsScreen() {
           {location && <Marker coordinate={{ latitude: location.lat, longitude: location.lng }} />}
         </MapView>
       </View>
+      <TextInput placeholder="Amenities (comma separated)" value={amenities} onChangeText={setAmenities} style={styles.input} />
+      {!!error && <Text style={{ color: '#dc2626' }}>{error}</Text>}
       {photoUris.length > 0 && (
         <FlatList
           data={photoUris}
