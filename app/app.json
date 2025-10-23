@@ -1,5 +1,6 @@
 {
   "expo": {
+    "scheme": "propertyapp",
     "name": "app",
     "slug": "app",
     "version": "1.0.0",

@@ -12,6 +12,7 @@ import AdminRolesScreen from './src/screens/admin/AdminRolesScreen';
 import EscrowConsoleScreen from './src/screens/admin/EscrowConsoleScreen';
 import ModerationScreen from './src/screens/ModerationScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
+import BookingDetailScreen from './src/screens/booking/BookingDetailScreen';
 import HomeMapScreen from './src/screens/HomeMapScreen';
 import ExploreScreen from './src/screens/ExploreScreen';
 import MyListingsScreen from './src/screens/MyListingsScreen';
@@ -76,6 +77,7 @@ export default function App() {
         <RootStack.Screen name="EscrowConsole" component={EscrowConsoleScreen} options={{ title: 'Escrow Console' }} />
         <RootStack.Screen name="Moderation" component={ModerationScreen} options={{ title: 'Moderation' }} />
         <RootStack.Screen name="MyBookings" component={MyBookingsScreen} options={{ title: 'My Bookings' }} />
+        <RootStack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking' }} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

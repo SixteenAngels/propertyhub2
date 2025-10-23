@@ -44,6 +44,8 @@ export default function PropertyDetailScreen() {
       const res: any = await fn({ propertyId, amount: prop.price, transactionType: prop.type, payerEmail: 'demo@example.com', startDate: start?.getTime(), endDate: end?.getTime() });
       if (res?.data?.authorizationUrl) {
         await WebBrowser.openBrowserAsync(res.data.authorizationUrl);
+        // After returning from browser, route to booking detail (mock for now)
+        nav.navigate('BookingDetail', { bookingId: res.data.bookingId });
       }
     } finally {
       setLoading(false);
